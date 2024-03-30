@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 icalendar = "0.16.0"
 serenity = "0.12.1"
+tokio = { version = "1.37.0", features = ["full"] }
