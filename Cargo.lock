@@ -593,15 +593,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "iCaly"
-version = "0.1.0"
-dependencies = [
- "icalendar",
- "serenity",
- "tokio",
-]
-
-[[package]]
 name = "iana-time-zone"
 version = "0.1.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -634,6 +625,15 @@ dependencies = [
  "iso8601",
  "nom",
  "uuid",
+]
+
+[[package]]
+name = "icaly"
+version = "0.1.0"
+dependencies = [
+ "icalendar",
+ "serenity",
+ "tokio",
 ]
 
 [[package]]

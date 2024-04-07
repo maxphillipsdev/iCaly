@@ -8,3 +8,6 @@
 - [ ] Re-fetch all the SchedueldEvents when a ScheduledEvent is modified.
 - [ ] Write the fetched SchedueldEvents to a iCal file.
 - [ ] Serve the iCal files with Nginx.
+- [ ] Persist past events?
+- [ ] Ensure data deletion after exiting a server.
+- [ ] HTTPS redirect.

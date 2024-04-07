@@ -1,7 +1,11 @@
 use std::env;
+use std::error::Error;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use icalendar::{Calendar, Component, Event};
-use serenity::all::{Guild, Ready, ScheduledEvent, UnavailableGuild};
+use serenity::all::{Guild, GuildId, Ready, ScheduledEvent, UnavailableGuild};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
@@ -19,54 +23,66 @@ impl EventHandler for Handler {
     }
 
     async fn ready(&self, ctx: Context, _: Ready) {
-        setup_calendars(ctx).await
+        setup_calendars(&ctx).await;
     }
 
     async fn guild_create(&self, ctx: Context, guild: Guild, _: Option<bool>) {
-        //update_calendar(ctx)
-        println!("guild create");
-
-        // let mut calendar = Calendar::new();
-
-        // for scheduled_event in guild.scheduled_events(ctx.http(), false).await {
-        //     // let cal_event = Event::new().summary(scheduled_event.).done();
-
-        //     // calendar.push(cal_event);
-        // }
+        publish_calendar(&ctx, guild.id).await;
     }
 
     async fn guild_delete(&self, ctx: Context, _: UnavailableGuild, _: Option<Guild>) {
-        update_calendar(ctx)
+        // let _ = publish_calendar(ctx, guild.id).await;
     }
 
     async fn guild_scheduled_event_create(&self, ctx: Context, event: ScheduledEvent) {
-        update_calendar(ctx)
+        publish_calendar(&ctx, event.guild_id).await;
     }
 
     async fn guild_scheduled_event_update(&self, ctx: Context, event: ScheduledEvent) {
-        update_calendar(ctx)
+        publish_calendar(&ctx, event.guild_id).await;
     }
 
     async fn guild_scheduled_event_delete(&self, ctx: Context, event: ScheduledEvent) {
-        update_calendar(ctx)
+        publish_calendar(&ctx, event.guild_id).await;
     }
 }
 
-fn update_calendar(ctx: Context) {
-    dbg!("Update calendar");
+async fn publish_calendar(ctx: &Context, guild_id: GuildId) {
+    let calendar = build_calendar(&ctx, guild_id).await.unwrap();
+    // let Ok(calendar) = build_calendar(&ctx, guild_id).await else {
+    //     return;
+    // };
+
+    let mut file = File::create(get_calendar_path(guild_id)).unwrap();
+    // let Ok(mut file) = File::create(get_calendar_path(guild_id)) else {
+    //     return;
+    // };
+
+    let _ = file.write_all(calendar.to_string().as_bytes());
 }
 
-async fn setup_calendars(ctx: Context) {
-    dbg!("Setup calendars");
+async fn build_calendar(ctx: &Context, guild_id: GuildId) -> Result<Calendar, SerenityError> {
+    let mut calendar = Calendar::new();
 
+    for event in guild_id.scheduled_events(ctx.http(), false).await? {
+        calendar.push(build_event(event));
+    }
+
+    Ok(calendar.done())
+}
+
+fn build_event(event: ScheduledEvent) -> Event {
+    Event::new().summary(event.name.as_str()).done()
+}
+
+fn get_calendar_path(id: GuildId) -> PathBuf {
+    let public_dir = env::args().nth(1).unwrap_or(".".into());
+    Path::new(public_dir.as_str()).join(id.to_string())
+}
+
+async fn setup_calendars(ctx: &Context) {
     for guild_id in ctx.cache.guilds() {
-        dbg!(guild_id);
-
-        if let Ok(events) = guild_id.scheduled_events(ctx.http(), false).await {
-            for event in events {
-                println!("{}", event.name);
-            }
-        }
+        publish_calendar(&ctx, guild_id).await;
     }
 }
 
