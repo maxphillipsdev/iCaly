@@ -1,10 +1,9 @@
 use std::env;
-use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use icalendar::{Calendar, Component, Event};
+use icalendar::{Calendar, CalendarDateTime, Component, DatePerhapsTime, Event, EventLike};
 use serenity::all::{Guild, GuildId, Ready, ScheduledEvent, UnavailableGuild};
 use serenity::async_trait;
 use serenity::model::channel::Message;
@@ -49,9 +48,6 @@ impl EventHandler for Handler {
 
 async fn publish_calendar(ctx: &Context, guild_id: GuildId) {
     let calendar = build_calendar(&ctx, guild_id).await.unwrap();
-    // let Ok(calendar) = build_calendar(&ctx, guild_id).await else {
-    //     return;
-    // };
 
     let mut file = File::create(get_calendar_path(guild_id)).unwrap();
     // let Ok(mut file) = File::create(get_calendar_path(guild_id)) else {
@@ -72,7 +68,14 @@ async fn build_calendar(ctx: &Context, guild_id: GuildId) -> Result<Calendar, Se
 }
 
 fn build_event(event: ScheduledEvent) -> Event {
-    Event::new().summary(event.name.as_str()).done()
+    println!("{}", event.start_time);
+
+    Event::new()
+        .summary(event.name.as_str())
+        .description(event.description.unwrap_or("".to_string()).as_str())
+        .starts::<DatePerhapsTime>(event.start_time.to_utc().into())
+        .ends::<DatePerhapsTime>(event.end_time.unwrap_or(event.start_time).to_utc().into())
+        .done()
 }
 
 fn get_calendar_path(id: GuildId) -> PathBuf {
