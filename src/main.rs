@@ -3,11 +3,13 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use icalendar::{Calendar, CalendarDateTime, Component, DatePerhapsTime, Event, EventLike};
+use icalendar::{Calendar, Component, DatePerhapsTime, Event, EventLike};
 use serenity::all::{Guild, GuildId, Ready, ScheduledEvent, UnavailableGuild};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
+
+const EVENT_USER_LIMIT: u64 = 5;
 
 struct Handler;
 
@@ -58,9 +60,16 @@ async fn publish_calendar(ctx: &Context, guild_id: GuildId) {
 }
 
 async fn build_calendar(ctx: &Context, guild_id: GuildId) -> Result<Calendar, SerenityError> {
-    let mut calendar = Calendar::new();
+    let mut calendar = Calendar::new()
+        .name(
+            guild_id
+                .name(ctx.cache.clone())
+                .unwrap_or("Discord".to_string())
+                .as_str(),
+        )
+        .done();
 
-    for event in guild_id.scheduled_events(ctx.http(), false).await? {
+    for event in guild_id.scheduled_events(ctx.http(), true).await? {
         calendar.push(build_event(&ctx, &event).await);
     }
 
@@ -73,7 +82,7 @@ async fn build_event(ctx: &Context, event: &ScheduledEvent) -> Event {
     let mut calendar_event = Event::new()
         .uid(event.id.to_string().as_str())
         .summary(event.name.as_str())
-        .description(event.description.clone().unwrap_or("".to_string()).as_str())
+        .description(get_description(ctx, event).await.as_str())
         .starts::<DatePerhapsTime>(event.start_time.to_utc().into())
         .ends::<DatePerhapsTime>(event.end_time.unwrap_or(event.start_time).to_utc().into())
         .done();
@@ -83,6 +92,39 @@ async fn build_event(ctx: &Context, event: &ScheduledEvent) -> Event {
     }
 
     calendar_event
+}
+
+async fn get_description(ctx: &Context, event: &ScheduledEvent) -> String {
+    let description = event.description.clone().unwrap_or("".to_string());
+    let user_count = event.user_count.unwrap_or(0);
+    let noun = match user_count {
+        1 => "person",
+        _ => "people",
+    };
+
+    let users = ctx
+        .http
+        .get_scheduled_event_users(
+            event.guild_id,
+            event.id,
+            Some(EVENT_USER_LIMIT),
+            None,
+            Some(true),
+        )
+        .await
+        .unwrap_or(Vec::new())
+        .iter()
+        .map(|event_user| {
+            event_user
+                .member
+                .clone()
+                .and_then(|member| member.nick)
+                .unwrap_or(event_user.user.name.clone())
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!("{description}\n\n{user_count} {noun} interested: {users}")
 }
 
 async fn get_location(ctx: &Context, event: &ScheduledEvent) -> Option<String> {
