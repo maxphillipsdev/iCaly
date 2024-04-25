@@ -61,21 +61,40 @@ async fn build_calendar(ctx: &Context, guild_id: GuildId) -> Result<Calendar, Se
     let mut calendar = Calendar::new();
 
     for event in guild_id.scheduled_events(ctx.http(), false).await? {
-        calendar.push(build_event(event));
+        calendar.push(build_event(&ctx, &event).await);
     }
 
     Ok(calendar.done())
 }
 
-fn build_event(event: ScheduledEvent) -> Event {
+async fn build_event(ctx: &Context, event: &ScheduledEvent) -> Event {
     println!("{}", event.start_time);
 
-    Event::new()
+    let mut calendar_event = Event::new()
+        .uid(event.id.to_string().as_str())
         .summary(event.name.as_str())
-        .description(event.description.unwrap_or("".to_string()).as_str())
+        .description(event.description.clone().unwrap_or("".to_string()).as_str())
         .starts::<DatePerhapsTime>(event.start_time.to_utc().into())
         .ends::<DatePerhapsTime>(event.end_time.unwrap_or(event.start_time).to_utc().into())
-        .done()
+        .done();
+
+    if let Some(location) = get_location(ctx, &event).await {
+        calendar_event = calendar_event.location(location.as_str()).done();
+    }
+
+    calendar_event
+}
+
+async fn get_location(ctx: &Context, event: &ScheduledEvent) -> Option<String> {
+    match (event.channel_id, &event.metadata) {
+        (Some(channel), None) => channel
+            .name(ctx.http())
+            .await
+            .ok()
+            .map(|name| format!("🔊 {name}")),
+        (None, Some(metadata)) => metadata.location.clone(),
+        _ => None,
+    }
 }
 
 fn get_calendar_path(id: GuildId) -> PathBuf {
